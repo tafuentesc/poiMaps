@@ -6,10 +6,14 @@
   <%= javascript_include_tag "application", "data-turbolinks-track" => true %>
   <%= csrf_meta_tags %>
 
+	<script src="http://code.jquery.com/jquery-1.10.1.min.js"></script>
+	<script src="http://code.jquery.com/jquery-migrate-1.2.1.min.js"></script>
+
     <meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
     <style type="text/css">
       html { height: 100% }
       body { height: 100%; margin: 0; padding: 0 }
+      tr.over { background-color: grey}
       #map_canvas { height: 100% }
     </style>
     <script type="text/javascript"
@@ -19,36 +23,24 @@
 			var map;
 			var infoWindow;
 			var polygons = [];
-			var bermudaTriangle;
 			var overlay = new google.maps.OverlayView();
 			
 			function initialize() {
-				var myLatLng = new google.maps.LatLng(24.886436490787712, -70.2685546875);
+				//$("table#polygon_list").bind("mouseover")
+			
+				initializeMap();
+			}
+			
+			function initializeMap() {
+				var myLatLng = new google.maps.LatLng(-33.498702,-70.612688);
 				var mapOptions = {
-					zoom: 5,
+					zoom: 16,
 					center: myLatLng,
-					mapTypeId: google.maps.MapTypeId.TERRAIN
+					mapTypeId: google.maps.MapTypeId.SATELLITE
 				};
 
 				map = new google.maps.Map(document.getElementById('map_canvas'),
 						mapOptions);
-
-				var triangleCoords = [
-						new google.maps.LatLng(25.774252, -80.190262),
-						new google.maps.LatLng(18.466465, -66.118292),
-						new google.maps.LatLng(32.321384, -64.75737)
-				];
-
-				bermudaTriangle = new google.maps.Polygon({
-					paths: triangleCoords,
-					strokeColor: '#FF0000',
-					strokeOpacity: 0.8,
-					strokeWeight: 3,
-					fillColor: '#FF0000',
-					fillOpacity: 0.35
-				});
-
-				bermudaTriangle.setMap(map);
 
 				var drawingManager = new google.maps.drawing.DrawingManager({
 					drawingMode: google.maps.drawing.OverlayType.POLYGON,
@@ -84,16 +76,14 @@
 						} 
 				}; 
 
-				// Add a listener for the click event
-				
-				google.maps.event.addListener(drawingManager, 'polygoncomplete', showArrays);
+				google.maps.event.addListener(drawingManager, 'polygoncomplete', updateList); //showArrays);
 				//google.maps.event.addListener(map, 'rightclick', deleteNode);
 
 				infoWindow = new google.maps.InfoWindow();
 			}
 			
 			/** @this {google.maps.Polygon} */
-			function myDeleteNode(event)
+			function deleteNode(event)
 			{
 				// obtenemos los vértices del polígono:
 				var path = this.getPath();
@@ -136,19 +126,110 @@
 				var yDist = Math.abs(nodePx.y - clickPx.y);
 		
 				if( xDist < nodeWidth && yDist < nodeWidth) {
-					path.removeAt(selectedIndex);
+					
+					//chequeamos que tenga más de 3 puntos; en caso contrario, no dejamos que lo borre
+					if(path.length > 3)
+						path.removeAt(selectedIndex);
+					else
+						alert("Un polígono no puede contener menos de 3 vértices");
 				}
 				return false;			
 			}
+
+			/** event {google.maps.Polygon} */
+			function updateList(event)
+			{
+				// lo subscribimos a deleteNode:
+				google.maps.event.addListener(event, 'rightclick', deleteNode);
+				
+				// lo agregamos al arreglo de polygons:
+				var id = polygons.length;
+				polygons.push(event);
+				
+				// lo agregamos a la tabla:
+				var name = "a";
+				var lat = "lat";//event.latLng.lat();
+				var lng = "lng";//event.latLng.lng();
+				var link = "<a href='#' class='deletePolygon'>Borrar</a>";
+				
+				var html = "<tr data-id="+id+"><td>"+name+"</td><td>"+lat+"</td><td>"+lng+"</td><td>"+link+"</td></tr>";
+				
+				$("table#polygon_list").append(html);
+				
+				// vinculamos el click con mostrar detalles:
+				//$("table#polygon_list tr").live("click", showPolygon);
+				// vinculamos la entrada en la tabla con el polígono:
+				$("table#polygon_list tr").live("mouseenter", highlightPolygon);
+				$("table#polygon_list tr").live("mouseleave", leavePolygon);
+				// vinculamos link con borrar polígono:
+				$("table#polygon_list tr a").live("click", deletePolygon);
+
+				// subscribimos eventos equivalentes:
+				google.maps.event.addListener(event, 'mouseover', enterPolygon);
+				google.maps.event.addListener(event, 'mouseout', exitPolygon);
+				
+				// lo subscribimos a showArray:
+				google.maps.event.addListener(event, 'click', showArrays);
+			}
+			function deletePolygon(event){
+				event.preventDefault();
+				
+				// a -> td -> tr
+				var $row = $(this).parent().parent();
+				var id = $row.attr("data-id");
+				
+				polygon = polygons[id];
+				
+				polygon.setMap(null);
+				polygons[id] = null;
+				
+				// borramos la fila en la tabla:
+				$row.fadeOut();
+			}
+			
+			function enterPolygon(event){
+					this.setOptions({fillColor:"#fff"});	
+			}
+			function exitPolygon(event){
+					this.setOptions({fillColor:null});	
+			}
+
+
+			function highlightPolygon(event){
+				var id = $(this).attr("data-id");
+				
+				if(id >= 0 && id < polygons.length){
+					$(this).addClass("over");
+					polygons[id].setOptions({fillColor:"#fff"});	
+				}
+			}
+			
+			function leavePolygon(event){
+				var id = $(this).attr("data-id");
+
+				if(id >= 0 && id < polygons.length)	{
+					$(this).removeClass("over");
+					polygons[id].setOptions({fillColor:null});				
+				}
+			}
+
+			function showRow(event){
+				// obtenemos id:
+				var id = $(this).attr("data-id");
+				
+				// desplegamos información:
+				// showPolygon(polygons[id]);
+			}
+
 
 			/** event {google.maps.Polygon} */
 			function showArrays(event) {
 
 				// Since this Polygon only has one path, we can call getPath()
 				// to return the MVCArray of LatLngs
-				var vertices = event.getPath();
+				var vertices = this.getPath();
 
-				var contentString = '<b>Bermuda Triangle Polygon</b><br>';
+				var contentString = '<b>Polygon Details</b><br>';
 				//contentString += 'Clicked Location: <br>' + event.latLng.lat() + ',' + event.latLng.lng() + '<br>';
 
 				// Iterate over the vertices.
@@ -157,66 +238,19 @@
 					contentString += '<br>' + 'Coordinate: ' + i + '<br>' + xy.lat() +',' + xy.lng();
 				}
 
+				$("div#polygon_info").html(contentString);
 				// Replace our Info Window's content and position
-				infoWindow.setContent(contentString);
+				//infoWindow.setContent(contentString);
 				//infoWindow.setPosition(event.latLng);
 
-				infoWindow.open(map);
+				//infoWindow.open(map);
 				
-				// lo subscribimos a myDeleteNode:
-				google.maps.event.addListener(event, 'rightclick', myDeleteNode);
+				// lo subscribimos a deleteNode:
+				google.maps.event.addListener(event, 'rightclick', deleteNode);
 				
 				// lo agregamos al arreglo de polygons:
 				polygons.push(event);
-			}
-			
-			function deleteNode(mev) {
-				var proj = map.getProjection();
-			
-				poly = bermudaTriangle;
-			
-				var clickPoint = proj.fromLatLngToPoint(mev.latLng);
-				var path = poly.getPath();
-				var minDist = 512;
-				var selectedIndex = -1;
-		
-				//point ready to store
-				var nodeToDelete;
-				var n = 0;
-				var length = path.getLength();
-		
-				for(n = 0; n <= length-1; n=n+1) {
-				
-					var nodePoint = proj.fromLatLngToPoint(path.getAt(n));
-					var dist = Math.sqrt(Math.pow(Math.abs(clickPoint.x - nodePoint.x),2) + Math.pow(Math.abs(clickPoint.y - nodePoint.y),2));
-				
-					if (dist < minDist) {
-						minDist = dist;
-						selectedIndex = n;
-						
-						//store point
-						nodeToDelete = path.getAt(n);
-					}
-					//alert(dist + " " + (dist < minDist));
-				}
-		
-				alert(n + " " + path.getLength() + " " + (n < path.getLength()));
-		
-				//---
-				//check if we're clicking inside the node
-		
-				var ovProj = overlay.getProjection();
-		
-				var clickPx = overlay.getProjection().fromLatLngToContainerPixel(mev.latLng);
-				var nodePx = overlay.getProjection().fromLatLngToContainerPixel(nodeToDelete);
-				var xDist = Math.abs(nodePx.x - clickPx.x);
-				var yDist = Math.abs(nodePx.y - clickPx.y);
-		
-				if( xDist < nodeWidth && yDist < nodeWidth) {
-					path.removeAt(selectedIndex);
-				}
-				return false;
-			}
+			}			
     </script>
 </head>
 <body onload="initialize()">
