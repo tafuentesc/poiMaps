@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>PoiMaps</title>
+  <%= stylesheet_link_tag    "application", media: "all", "data-turbolinks-track" => true %>
+  <%= javascript_include_tag "application", "data-turbolinks-track" => true %>
+  <%= csrf_meta_tags %>
+
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
+    <style type="text/css">
+      html { height: 100% }
+      body { height: 100%; margin: 0; padding: 0 }
+      #map_canvas { height: 100% }
+    </style>
+    <script type="text/javascript"
+      src="http://maps.googleapis.com/maps/api/js?key=AIzaSyBwNVUZgov8CQrXbgaDf2wuEBVlnSXovs4&sensor=false&libraries=drawing">
+    </script>
+    <script type="text/javascript">
+			var map;
+			var infoWindow;
+			var polygons = [];
+			var bermudaTriangle;
+			var overlay = new google.maps.OverlayView();
+			
+			function initialize() {
+				var myLatLng = new google.maps.LatLng(24.886436490787712, -70.2685546875);
+				var mapOptions = {
+					zoom: 5,
+					center: myLatLng,
+					mapTypeId: google.maps.MapTypeId.TERRAIN
+				};
+
+				map = new google.maps.Map(document.getElementById('map_canvas'),
+						mapOptions);
+
+				var triangleCoords = [
+						new google.maps.LatLng(25.774252, -80.190262),
+						new google.maps.LatLng(18.466465, -66.118292),
+						new google.maps.LatLng(32.321384, -64.75737)
+				];
+
+				bermudaTriangle = new google.maps.Polygon({
+					paths: triangleCoords,
+					strokeColor: '#FF0000',
+					strokeOpacity: 0.8,
+					strokeWeight: 3,
+					fillColor: '#FF0000',
+					fillOpacity: 0.35
+				});
+
+				bermudaTriangle.setMap(map);
+
+				var drawingManager = new google.maps.drawing.DrawingManager({
+					drawingMode: google.maps.drawing.OverlayType.POLYGON,
+					drawingControl: true,
+					drawingControlOptions: {
+						position: google.maps.ControlPosition.TOP_CENTER,
+						drawingModes: [google.maps.drawing.OverlayType.MARKER, google.maps.drawing.OverlayType.POLYGON]
+					},
+					markerOptions: {
+						icon: new google.maps.MarkerImage('http://www.example.com/icon.png')
+					},
+					circleOptions: {
+						fillColor: '#ffff00',
+						fillOpacity: 1,
+						strokeWeight: 5,
+						clickable: false,
+						zIndex: 1,
+						editable: true
+					},
+					polygonOptions: {
+						editable: true
+					}
+				});
+				drawingManager.setMap(map);
+
+				// Asociamos overlay y lo configuramos:
+				overlay.setMap(map);
+				
+				overlay.draw = function () { 
+						if (!this.ready) { 
+								this.ready = true; 
+								google.maps.event.trigger(this, 'ready'); 
+						} 
+				}; 
+
+				// Add a listener for the click event
+				
+				google.maps.event.addListener(drawingManager, 'polygoncomplete', showArrays);
+				//google.maps.event.addListener(map, 'rightclick', deleteNode);
+
+				infoWindow = new google.maps.InfoWindow();
+			}
+			
+			/** @this {google.maps.Polygon} */
+			function myDeleteNode(event)
+			{
+				// obtenemos los vértices del polígono:
+				var path = this.getPath();
+
+				// obtenemos punto en el cual se hizo click:
+				var proj = map.getProjection();
+				var clickPoint = proj.fromLatLngToPoint(event.latLng);
+			
+				var minDist = 512;
+				var selectedIndex = -1;
+				var nodeWidth = 6;
+		
+				// variables auxiliares:
+				var nodeToDelete;
+				var n = 0;
+				var length = path.getLength();
+		
+				// Buscamos vértice más cercano:
+				for(n = 0; n <= length-1; n=n+1) {
+				
+					var nodePoint = proj.fromLatLngToPoint(path.getAt(n));
+					var dist = Math.sqrt(Math.pow(Math.abs(clickPoint.x - nodePoint.x),2) + Math.pow(Math.abs(clickPoint.y - nodePoint.y),2));
+				
+					if (dist < minDist) {
+						minDist = dist;
+						selectedIndex = n;
+						
+						//store point
+						nodeToDelete = path.getAt(n);
+					}
+				}
+
+				//check if we're clicking inside the node
+		
+				var ovProj = overlay.getProjection();
+		
+				var clickPx = overlay.getProjection().fromLatLngToContainerPixel(event.latLng);
+				var nodePx = overlay.getProjection().fromLatLngToContainerPixel(nodeToDelete);
+				var xDist = Math.abs(nodePx.x - clickPx.x);
+				var yDist = Math.abs(nodePx.y - clickPx.y);
+		
+				if( xDist < nodeWidth && yDist < nodeWidth) {
+					path.removeAt(selectedIndex);
+				}
+				return false;			
+			}
+
+			/** event {google.maps.Polygon} */
+			function showArrays(event) {
+
+				// Since this Polygon only has one path, we can call getPath()
+				// to return the MVCArray of LatLngs
+				var vertices = event.getPath();
+
+				var contentString = '<b>Bermuda Triangle Polygon</b><br>';
+				//contentString += 'Clicked Location: <br>' + event.latLng.lat() + ',' + event.latLng.lng() + '<br>';
+
+				// Iterate over the vertices.
+				for (var i =0; i < vertices.getLength(); i++) {
+					var xy = vertices.getAt(i);
+					contentString += '<br>' + 'Coordinate: ' + i + '<br>' + xy.lat() +',' + xy.lng();
+				}
+
+				// Replace our Info Window's content and position
+				infoWindow.setContent(contentString);
+				//infoWindow.setPosition(event.latLng);
+
+				infoWindow.open(map);
+				
+				// lo subscribimos a myDeleteNode:
+				google.maps.event.addListener(event, 'rightclick', myDeleteNode);
+				
+				// lo agregamos al arreglo de polygons:
+				polygons.push(event);
+			}
+			
+			function deleteNode(mev) {
+				var proj = map.getProjection();
+			
+				poly = bermudaTriangle;
+			
+				var clickPoint = proj.fromLatLngToPoint(mev.latLng);
+				var path = poly.getPath();
+				var minDist = 512;
+				var selectedIndex = -1;
+		
+				//point ready to store
+				var nodeToDelete;
+				var n = 0;
+				var length = path.getLength();
+		
+				for(n = 0; n <= length-1; n=n+1) {
+				
+					var nodePoint = proj.fromLatLngToPoint(path.getAt(n));
+					var dist = Math.sqrt(Math.pow(Math.abs(clickPoint.x - nodePoint.x),2) + Math.pow(Math.abs(clickPoint.y - nodePoint.y),2));
+				
+					if (dist < minDist) {
+						minDist = dist;
+						selectedIndex = n;
+						
+						//store point
+						nodeToDelete = path.getAt(n);
+					}
+					//alert(dist + " " + (dist < minDist));
+				}
+		
+				alert(n + " " + path.getLength() + " " + (n < path.getLength()));
+		
+				//---
+				//check if we're clicking inside the node
+		
+				var ovProj = overlay.getProjection();
+		
+				var clickPx = overlay.getProjection().fromLatLngToContainerPixel(mev.latLng);
+				var nodePx = overlay.getProjection().fromLatLngToContainerPixel(nodeToDelete);
+				var xDist = Math.abs(nodePx.x - clickPx.x);
+				var yDist = Math.abs(nodePx.y - clickPx.y);
+		
+				if( xDist < nodeWidth && yDist < nodeWidth) {
+					path.removeAt(selectedIndex);
+				}
+				return false;
+			}
+    </script>
+</head>
+<body onload="initialize()">
+
+<%= yield %>
+
+</body>
+</html>
