@@ -4,7 +4,14 @@ source 'https://rubygems.org'
 gem 'rails', '3.2.14'
 
 # Use sqlite3 as the database for Active Record
-gem 'sqlite3'
+# gem 'sqlite3'
+
+# Use postgresql as the database for Active Record
+gem 'pg'
+
+# add postgis support
+gem 'rgeo'
+gem 'activerecord-postgis-adapter'
 
 # Use SCSS for stylesheets
 # gem 'sass-rails', '~> 4.0.0'
