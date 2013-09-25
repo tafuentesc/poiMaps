@@ -157,7 +157,8 @@
 				$("table#polygon_list").append(html);
 				
 				// vinculamos el click con mostrar detalles:
-				//$("table#polygon_list tr").live("click", showPolygon);
+				$("table#polygon_list tr").live("click", showRow);
+				
 				// vinculamos la entrada en la tabla con el polígono:
 				$("table#polygon_list tr").live("mouseenter", highlightPolygon);
 				$("table#polygon_list tr").live("mouseleave", leavePolygon);
@@ -171,6 +172,7 @@
 				// lo subscribimos a showArray:
 				google.maps.event.addListener(event, 'click', showArrays);
 			}
+			
 			function deletePolygon(event){
 				event.preventDefault();
 				
@@ -184,23 +186,31 @@
 				polygons[id] = null;
 				
 				// borramos la fila en la tabla:
-				$row.fadeOut();
+				$row.fadeOut(function() { 
+					$(this).remove(); 
+				});
+				$("div#polygon_info").fadeOut(function() { 
+					$(this).html("");
+					$(this).fadeIn();
+				});
 			}
 			
 			function enterPolygon(event){
-					this.setOptions({fillColor:"#fff"});	
+					this.setOptions({fillColor:"#fff"});
+					showPolygon(this);	
 			}
 			function exitPolygon(event){
-					this.setOptions({fillColor:null});	
+					this.setOptions({fillColor:null});
+					$("div#polygon_info").html("");	
 			}
-
 
 			function highlightPolygon(event){
 				var id = $(this).attr("data-id");
 				
-				if(id >= 0 && id < polygons.length){
+				if(id >= 0 && id < polygons.length && polygons[id]!=null){
 					$(this).addClass("over");
 					polygons[id].setOptions({fillColor:"#fff"});	
+					showPolygon(polygons[id]);
 				}
 			}
 			
@@ -209,7 +219,8 @@
 
 				if(id >= 0 && id < polygons.length)	{
 					$(this).removeClass("over");
-					polygons[id].setOptions({fillColor:null});				
+					polygons[id].setOptions({fillColor:null});
+					$("div#polygon_info").html("");				
 				}
 			}
 
@@ -218,16 +229,19 @@
 				var id = $(this).attr("data-id");
 				
 				// desplegamos información:
-				// showPolygon(polygons[id]);
+				showPolygon(polygons[id]);
+			}
+			
+			/** this {google.maps.Polygon} */
+			function showArrays(event) {
+				showPolygon(this);
 			}
 
-
-			/** event {google.maps.Polygon} */
-			function showArrays(event) {
+			function showPolygon(polygon) {
 
 				// Since this Polygon only has one path, we can call getPath()
 				// to return the MVCArray of LatLngs
-				var vertices = this.getPath();
+				var vertices = polygon.getPath();
 
 				var contentString = '<b>Polygon Details</b><br>';
 				//contentString += 'Clicked Location: <br>' + event.latLng.lat() + ',' + event.latLng.lng() + '<br>';
@@ -244,12 +258,6 @@
 				//infoWindow.setPosition(event.latLng);
 
 				//infoWindow.open(map);
-				
-				// lo subscribimos a deleteNode:
-				google.maps.event.addListener(event, 'rightclick', deleteNode);
-				
-				// lo agregamos al arreglo de polygons:
-				polygons.push(event);
 			}			
     </script>
 </head>
