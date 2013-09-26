@@ -17,7 +17,7 @@
       #map_canvas { height: 100% }
     </style>
     <script type="text/javascript"
-      src="http://maps.googleapis.com/maps/api/js?key=AIzaSyBwNVUZgov8CQrXbgaDf2wuEBVlnSXovs4&sensor=false&libraries=drawing">
+      src="http://maps.googleapis.com/maps/api/js?key=AIzaSyBwNVUZgov8CQrXbgaDf2wuEBVlnSXovs4&sensor=false&libraries=drawing,geometry">
     </script>
     <script type="text/javascript">
 			var map;
@@ -28,7 +28,38 @@
 			function initialize() {
 				//$("table#polygon_list").bind("mouseover")
 			
+				// inicialiamos el mapa
 				initializeMap();
+				
+				// cargamos los registros existentes:
+				loadBuildings();
+			}
+			
+			function loadBuildings() {
+				 
+				$.ajax({
+					type: "GET",
+					url: '/welcome/index.json',
+					success: function(data){
+						// creamos un polígono por cada uno y lo dibujamos:
+						$.each(data, function(index, value){
+							var vertices = google.maps.geometry.encoding.decodePath(value.building.polygon) 
+							var polygon = new google.maps.Polygon({
+								path: vertices,
+								strokeColor: "000000",
+								strokeOpacity: 0.8,
+								strokeWeight: 3,
+								fillColor: "#FF0000",
+								fillOpacity: 0.35,
+								zIndex: 1,
+								editable: true								
+							});
+							
+							polygon.setMap(map);
+							polygons.push(polygon);
+						});
+					}
+				});
 			}
 			
 			function initializeMap() {
@@ -42,12 +73,13 @@
 				map = new google.maps.Map(document.getElementById('map_canvas'),
 						mapOptions);
 
+				//drawingModes : [google.maps.drawing.OverlayType.MARKER] 
 				var drawingManager = new google.maps.drawing.DrawingManager({
 					drawingMode: google.maps.drawing.OverlayType.POLYGON,
 					drawingControl: true,
 					drawingControlOptions: {
 						position: google.maps.ControlPosition.TOP_CENTER,
-						drawingModes: [google.maps.drawing.OverlayType.MARKER, google.maps.drawing.OverlayType.POLYGON]
+						drawingModes: [google.maps.drawing.OverlayType.POLYGON]
 					},
 					markerOptions: {
 						icon: new google.maps.MarkerImage('http://www.example.com/icon.png')
@@ -61,6 +93,12 @@
 						editable: true
 					},
 					polygonOptions: {
+						strokeColor: "000000",
+						strokeOpacity: 0.8,
+						strokeWeight: 3,
+						fillColor: "#FF0000",
+						fillOpacity: 0.35,
+						zIndex: 1,
 						editable: true
 					}
 				});

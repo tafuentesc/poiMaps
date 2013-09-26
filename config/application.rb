@@ -22,3 +22,6 @@ module PoiMaps
     # config.i18n.default_locale = :de
   end
 end
+
+require "#{Rails.root}/lib/rgeo"
+require "#{Rails.root}/lib/polyline_encoder"
