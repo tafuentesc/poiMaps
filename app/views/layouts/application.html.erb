@@ -23,11 +23,11 @@
 			var map;
 			var infoWindow;
 			var polygons = [];
-			var overlay = new google.maps.OverlayView();
+			var overlay = new google.maps.OverlayView();			
 			
 			function initialize() {
-				//$("table#polygon_list").bind("mouseover")
-			
+				$("input[type='submit']#submit").bind('click', submitData);
+				
 				// inicialiamos el mapa
 				initializeMap();
 				
@@ -35,15 +35,55 @@
 				loadBuildings();
 			}
 			
+			function polygonAjax(polygon)
+			{
+				var polygonString = 'POLYGON((';
+				
+				var vertices = polygon.getPath();
+				
+				for (var i =0; i < vertices.getLength() - 1; i++) {
+					var xy = vertices.getAt(i);
+					polygonString += xy.lng() + ' ' + xy.lat() + ', ';
+				}
+				polygonString += xy.lng() + ' ' + xy.lat() + '))';
+				
+				return polygonString;
+			}
+			
+			function submitData(event)
+			{
+				event.preventDefault();
+				
+				polygon = 'POLYGON((-70.61267137527466 -33.49551386595725, -70.61329364776611 -33.498537928852656, -70.6090235710144 -33.497160114479506,-70.60900211334229 -33.49596121919658))';
+				var data = {building: {name: "ajaxTest", description: "hard-coded polygon", polygon: polygon}};
+				
+				$.ajax({
+					type: "POST",
+					url: '/buildings.json',
+					data: data,
+					success: function(data){
+						alert("funciona!");
+					}
+				});								
+			}
+			
 			function loadBuildings() {
-				 
+				var p; 
 				$.ajax({
 					type: "GET",
-					url: '/welcome/index.json',
+					url: '/buildings.json',
 					success: function(data){
 						// creamos un polígono por cada uno y lo dibujamos:
+						p = data;
+
 						$.each(data, function(index, value){
+							var id = value.building.id;
+							var name = value.building.name;
+							var description = value.building.description;
+							
 							var vertices = google.maps.geometry.encoding.decodePath(value.building.polygon) 
+							vertices = vertices.slice(0,vertices.length-1)
+
 							var polygon = new google.maps.Polygon({
 								path: vertices,
 								strokeColor: "000000",
@@ -52,11 +92,14 @@
 								fillColor: "#FF0000",
 								fillOpacity: 0.35,
 								zIndex: 1,
-								editable: true								
+								editable: true,
+								draggable: true								
 							});
 							
+							polygonObject = {id: id, name: name, description: description, polygon: polygon};
+							
 							polygon.setMap(map);
-							polygons.push(polygon);
+							updateList(polygon);
 						});
 					}
 				});
@@ -269,7 +312,7 @@
 				// desplegamos información:
 				showPolygon(polygons[id]);
 			}
-			
+						
 			/** this {google.maps.Polygon} */
 			function showArrays(event) {
 				showPolygon(this);
@@ -291,11 +334,6 @@
 				}
 
 				$("div#polygon_info").html(contentString);
-				// Replace our Info Window's content and position
-				//infoWindow.setContent(contentString);
-				//infoWindow.setPosition(event.latLng);
-
-				//infoWindow.open(map);
 			}			
     </script>
 </head>

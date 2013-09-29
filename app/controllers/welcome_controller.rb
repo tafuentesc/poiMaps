@@ -1,6 +1,7 @@
 class WelcomeController < ApplicationController
   def index
   	@buildings = Building.all
+  	@building = Building.new
   	
   	respond_to do |format|
   		format.html # index.html.erb

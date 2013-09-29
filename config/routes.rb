@@ -1,5 +1,8 @@
 PoiMaps::Application.routes.draw do
-  root :to => 'welcome#index'
+
+	resources :buildings
+
+  root :to => 'buildings#index'
 	
   get "welcome/index"
 
