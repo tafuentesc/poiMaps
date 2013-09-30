@@ -20,4 +20,21 @@ class BuildingsController < ApplicationController
   		end 		
   	end
   end
+  
+  def show
+  	@building = Building.find_by_id(params[:id])
+
+  	respond_to do |format|
+			format.json { render :json => @building, :status => :created }
+  	end
+  end
+
+  def destroy
+    @building = Building.find(params[:id])
+    @building.destroy
+
+    respond_to do |format|
+      format.json { head :no_content }
+    end
+  end
 end

@@ -15,6 +15,7 @@
       body { height: 100%; margin: 0; padding: 0 }
       tr.over { background-color: grey}
       #map_canvas { height: 100% }
+      .hidden { visibility: hidden}
     </style>
     <script type="text/javascript"
       src="http://maps.googleapis.com/maps/api/js?key=AIzaSyBwNVUZgov8CQrXbgaDf2wuEBVlnSXovs4&sensor=false&libraries=drawing,geometry">
@@ -23,16 +24,120 @@
 			var map;
 			var infoWindow;
 			var polygons = [];
-			var overlay = new google.maps.OverlayView();			
+			var newPolygon;
+			var overlay = new google.maps.OverlayView();
+			var polygonOptions;			
 			
 			function initialize() {
-				$("input[type='submit']#submit").bind('click', submitData);
+				$("input#submitButton").bind('click', createBuilding);
+				$("input#cancelButton").bind('click', cancelBuilding);
+								
 				
+				// vinculamos el click con mostrar detalles:
+				$("table#polygon_list tr").live("click", showRow);
+				
+				// vinculamos la entrada en la tabla con el polígono:
+				$("table#polygon_list tr").live("mouseenter", highlightPolygon);
+				$("table#polygon_list tr").live("mouseleave", leavePolygon);
+				// vinculamos link con borrar polígono:
+				$("table#polygon_list tr a.deletePolygon").live("click", deletePolygon);
+
 				// inicialiamos el mapa
 				initializeMap();
 				
 				// cargamos los registros existentes:
 				loadBuildings();
+			}
+			
+			function cancelBuilding(event)
+			{
+				event.preventDefault();
+				
+				// borramos newPolygon y ocultamos el form:
+				newPolygon.polygon.setMap(null);
+				newPolygon = null;
+				clearForm();						
+			}
+			
+			/** @this {google.maps.Polygon} */
+			function createPolygonObject(polygon)
+			{
+				// Agregamos el polígono a polygons:
+				newPolygon = {id: null, name: null, description:null, polygon: polygon};
+				
+				// Mostramos la ventana de creación:
+				$("div#buildingForm").fadeOut(function(){
+					$(this).removeClass("hidden");
+					$(this).fadeIn(function(){
+						$("div#buildingForm input#building_name").focus();
+					});
+				});
+			}
+
+			function createBuilding(event)
+			{
+				event.preventDefault();
+				
+				// Validamos que el nombre tenga largo > 0:
+				var name = $("input#building_name").val();
+				var description = $("input#building_description").val();
+				
+				if(name.length == 0)
+				{
+					alert('el edificio debe tener un nombre');
+					return;
+				}
+					
+				// En caso de que cumpla, lo agregamos			
+				if(newPolygon != null && newPolygon.id == null && newPolygon.name == null && newPolygon.description == null)
+				{
+					// Seteamos los parámetros
+					newPolygon.name = name;
+					newPolygon.description = description;
+					
+					// ejecutamos llamada ájax para guardarlo:
+					submitData();
+				}
+				else alert('Error tipo 2');
+			}
+			
+			function submitData()
+			{
+				// trabajamos con newPolygon:
+				if(newPolygon == null) return;
+				
+				polygon = polygonAjax(newPolygon.polygon);
+				alert(newPolygon);
+				var data = {building: {name: newPolygon.name, description: newPolygon.description, polygon: polygon}};
+				
+				$.ajax({
+					type: "POST",
+					url: '/buildings.json',
+					data: data,
+					success: function(result){
+						// le actualizamos el id:
+						newPolygon.id = result.building.id;
+						
+						// actualizamos la lista de polígonos:
+						updateList(newPolygon);
+						
+						// eliminamos la referencia:
+						newPolygon = null;
+						
+						// vaciamos el form:
+						clearForm();						
+					}
+				});								
+			}
+			
+			function clearForm()
+			{
+				// vaciamos el form y lo ocultamos:
+				$("div#buildingForm").fadeOut(function(){
+					$("input#building_name").val('');
+					$("input#building_description").val('');
+					$(this).addClass("hidden");
+				});
 			}
 			
 			function polygonAjax(polygon)
@@ -41,30 +146,14 @@
 				
 				var vertices = polygon.getPath();
 				
-				for (var i =0; i < vertices.getLength() - 1; i++) {
+				for (var i =0; i < vertices.getLength(); i++) {
 					var xy = vertices.getAt(i);
 					polygonString += xy.lng() + ' ' + xy.lat() + ', ';
 				}
-				polygonString += xy.lng() + ' ' + xy.lat() + '))';
+				// Repetimos el primer punto:
+				polygonString += vertices.getAt(0).lng() + ' ' + vertices.getAt(0).lat() + '))';
 				
 				return polygonString;
-			}
-			
-			function submitData(event)
-			{
-				event.preventDefault();
-				
-				polygon = 'POLYGON((-70.61267137527466 -33.49551386595725, -70.61329364776611 -33.498537928852656, -70.6090235710144 -33.497160114479506,-70.60900211334229 -33.49596121919658))';
-				var data = {building: {name: "ajaxTest", description: "hard-coded polygon", polygon: polygon}};
-				
-				$.ajax({
-					type: "POST",
-					url: '/buildings.json',
-					data: data,
-					success: function(data){
-						alert("funciona!");
-					}
-				});								
 			}
 			
 			function loadBuildings() {
@@ -84,25 +173,148 @@
 							var vertices = google.maps.geometry.encoding.decodePath(value.building.polygon) 
 							vertices = vertices.slice(0,vertices.length-1)
 
-							var polygon = new google.maps.Polygon({
-								path: vertices,
-								strokeColor: "000000",
-								strokeOpacity: 0.8,
-								strokeWeight: 3,
-								fillColor: "#FF0000",
-								fillOpacity: 0.35,
-								zIndex: 1,
-								editable: true,
-								draggable: true								
-							});
-							
+							var polygon = new google.maps.Polygon({path: vertices});
+							polygon.setOptions(polygonOptions);
+
+							// creamos el objeto con toda la información necesaria:							
 							polygonObject = {id: id, name: name, description: description, polygon: polygon};
 							
+							// lo agregamos al mapa:
 							polygon.setMap(map);
-							updateList(polygon);
+							
+							// actualizamos la lista de polígonos:
+							updateList(polygonObject);
 						});
 					}
 				});
+			}
+
+			/** polygonObject {name:string, description:string, polygon:google.maps.Polygon } */
+			function updateList(polygonObject)
+			{
+				// Extraemos el polígono:
+				var polygon = polygonObject.polygon;
+			
+				// lo subscribimos a deleteNode:
+				google.maps.event.addListener(polygon, 'rightclick', deleteNode);
+				
+				// lo agregamos al arreglo de polygons:
+				var id = polygons.length;
+				polygons.push(polygonObject);
+				//polygons[polygonObject.name] = polygonObject;
+				
+				// lo agregamos a la tabla:
+				var name = polygonObject.name;
+				var description = polygonObject.description;//event.latLng.lat();
+				var deleteLink = "<a href='#' class='deletePolygon'>Borrar</a>";
+				var editLink = "<a href='#' class='editPolygon'>Editar</a>";
+				
+				var html = "<tr data-id="+id+"><td>"+name+"</td><td>"+description+"</td><td>"+editLink+"</td><td>" + deleteLink + "</td></tr>";
+				
+				$("table#polygon_list").append(html);
+
+				// subscribimos eventos equivalentes:
+				google.maps.event.addListener(polygon, 'mouseover', enterPolygon);
+				google.maps.event.addListener(polygon, 'mouseout', exitPolygon);
+				
+				// lo subscribimos a showArray:
+				google.maps.event.addListener(polygon, 'click', showArrays);
+			}
+			
+			function deletePolygon(event){
+				event.preventDefault();
+				
+				// a -> td -> tr
+				var $row = $(this).parent().parent();
+				var id = $row.attr("data-id");
+				
+				polygonObject = polygons[id];
+				polygon = polygonObject.polygon;
+				
+				// hacemos llamada ajax para borrar
+				polygonId = polygonObject.id;
+				
+				$.ajax({
+					type: "DELETE",
+					dataType: 'jsonp', 
+					url: '/buildings/'+ polygonId +'.json',
+					success: function(result){
+				
+						alert('lo borramos!');
+
+						polygon.setMap(null);
+						polygons[id] = null;
+				
+						// borramos la fila en la tabla:
+						$row.fadeOut(function() { 
+							$(this).remove(); 
+						});
+						$("div#polygon_info").fadeOut(function() { 
+							$(this).html("");
+							$(this).fadeIn();
+						});
+					}
+				});
+			}
+			
+			function enterPolygon(event){
+					this.setOptions({fillColor:"#fff"});
+					showPolygon(this);	
+			}
+			function exitPolygon(event){
+					this.setOptions({fillColor:null});
+					$("div#polygon_info").html("");	
+			}
+
+			function highlightPolygon(event){
+				var id = $(this).attr("data-id");
+				
+				if(id >= 0 && id < polygons.length && polygons[id]!=null){
+					$(this).addClass("over");
+					polygons[id].polygon.setOptions({fillColor:"#fff"});	
+					//showPolygon(polygons[id]);
+				}
+			}
+			
+			function leavePolygon(event){
+				var id = $(this).attr("data-id");
+
+				if(id >= 0 && id < polygons.length)	{
+					$(this).removeClass("over");
+					polygons[id].polygon.setOptions({fillColor:null});
+					$("div#polygon_info").html("");				
+				}
+			}
+
+			function showRow(event){
+				// obtenemos id:
+				var id = $(this).attr("data-id");
+				
+				// desplegamos información:
+				showPolygon(polygons[id].polygon);
+			}
+						
+			/** this {google.maps.Polygon} */
+			function showArrays(event) {
+				showPolygon(this);
+			}
+
+			function showPolygon(polygon) {
+
+				// Since this Polygon only has one path, we can call getPath()
+				// to return the MVCArray of LatLngs
+				var vertices = polygon.getPath();
+
+				var contentString = '<b>Polygon Details</b><br>';
+				//contentString += 'Clicked Location: <br>' + event.latLng.lat() + ',' + event.latLng.lng() + '<br>';
+
+				// Iterate over the vertices.
+				for (var i =0; i < vertices.getLength(); i++) {
+					var xy = vertices.getAt(i);
+					contentString += '<br>' + 'Coordinate: ' + i + '<br>' + xy.lat() +',' + xy.lng();
+				}
+
+				$("div#polygon_info").html(contentString);
 			}
 			
 			function initializeMap() {
@@ -116,6 +328,16 @@
 				map = new google.maps.Map(document.getElementById('map_canvas'),
 						mapOptions);
 
+				polygonOptions = {
+						strokeColor: "000000",
+						strokeOpacity: 0.8,
+						strokeWeight: 3,
+						fillColor: "#FF0000",
+						fillOpacity: 0.35,
+						zIndex: 1,
+						editable: true
+				};
+
 				//drawingModes : [google.maps.drawing.OverlayType.MARKER] 
 				var drawingManager = new google.maps.drawing.DrawingManager({
 					drawingMode: google.maps.drawing.OverlayType.POLYGON,
@@ -127,23 +349,7 @@
 					markerOptions: {
 						icon: new google.maps.MarkerImage('http://www.example.com/icon.png')
 					},
-					circleOptions: {
-						fillColor: '#ffff00',
-						fillOpacity: 1,
-						strokeWeight: 5,
-						clickable: false,
-						zIndex: 1,
-						editable: true
-					},
-					polygonOptions: {
-						strokeColor: "000000",
-						strokeOpacity: 0.8,
-						strokeWeight: 3,
-						fillColor: "#FF0000",
-						fillOpacity: 0.35,
-						zIndex: 1,
-						editable: true
-					}
+					polygonOptions: polygonOptions
 				});
 				drawingManager.setMap(map);
 
@@ -157,10 +363,8 @@
 						} 
 				}; 
 
-				google.maps.event.addListener(drawingManager, 'polygoncomplete', updateList); //showArrays);
-				//google.maps.event.addListener(map, 'rightclick', deleteNode);
-
-				infoWindow = new google.maps.InfoWindow();
+				google.maps.event.addListener(drawingManager, 'polygoncomplete', createPolygonObject); //showArrays);
+				//infoWindow = new google.maps.InfoWindow();
 			}
 			
 			/** @this {google.maps.Polygon} */
@@ -197,8 +401,7 @@
 					}
 				}
 
-				//check if we're clicking inside the node
-		
+				//check if we're clicking inside the node		
 				var ovProj = overlay.getProjection();
 		
 				var clickPx = overlay.getProjection().fromLatLngToContainerPixel(event.latLng);
@@ -216,125 +419,7 @@
 				}
 				return false;			
 			}
-
-			/** event {google.maps.Polygon} */
-			function updateList(event)
-			{
-				// lo subscribimos a deleteNode:
-				google.maps.event.addListener(event, 'rightclick', deleteNode);
-				
-				// lo agregamos al arreglo de polygons:
-				var id = polygons.length;
-				polygons.push(event);
-				
-				// lo agregamos a la tabla:
-				var name = "a";
-				var lat = "lat";//event.latLng.lat();
-				var lng = "lng";//event.latLng.lng();
-				var link = "<a href='#' class='deletePolygon'>Borrar</a>";
-				
-				var html = "<tr data-id="+id+"><td>"+name+"</td><td>"+lat+"</td><td>"+lng+"</td><td>"+link+"</td></tr>";
-				
-				$("table#polygon_list").append(html);
-				
-				// vinculamos el click con mostrar detalles:
-				$("table#polygon_list tr").live("click", showRow);
-				
-				// vinculamos la entrada en la tabla con el polígono:
-				$("table#polygon_list tr").live("mouseenter", highlightPolygon);
-				$("table#polygon_list tr").live("mouseleave", leavePolygon);
-				// vinculamos link con borrar polígono:
-				$("table#polygon_list tr a").live("click", deletePolygon);
-
-				// subscribimos eventos equivalentes:
-				google.maps.event.addListener(event, 'mouseover', enterPolygon);
-				google.maps.event.addListener(event, 'mouseout', exitPolygon);
-				
-				// lo subscribimos a showArray:
-				google.maps.event.addListener(event, 'click', showArrays);
-			}
-			
-			function deletePolygon(event){
-				event.preventDefault();
-				
-				// a -> td -> tr
-				var $row = $(this).parent().parent();
-				var id = $row.attr("data-id");
-				
-				polygon = polygons[id];
-				
-				polygon.setMap(null);
-				polygons[id] = null;
-				
-				// borramos la fila en la tabla:
-				$row.fadeOut(function() { 
-					$(this).remove(); 
-				});
-				$("div#polygon_info").fadeOut(function() { 
-					$(this).html("");
-					$(this).fadeIn();
-				});
-			}
-			
-			function enterPolygon(event){
-					this.setOptions({fillColor:"#fff"});
-					showPolygon(this);	
-			}
-			function exitPolygon(event){
-					this.setOptions({fillColor:null});
-					$("div#polygon_info").html("");	
-			}
-
-			function highlightPolygon(event){
-				var id = $(this).attr("data-id");
-				
-				if(id >= 0 && id < polygons.length && polygons[id]!=null){
-					$(this).addClass("over");
-					polygons[id].setOptions({fillColor:"#fff"});	
-					showPolygon(polygons[id]);
-				}
-			}
-			
-			function leavePolygon(event){
-				var id = $(this).attr("data-id");
-
-				if(id >= 0 && id < polygons.length)	{
-					$(this).removeClass("over");
-					polygons[id].setOptions({fillColor:null});
-					$("div#polygon_info").html("");				
-				}
-			}
-
-			function showRow(event){
-				// obtenemos id:
-				var id = $(this).attr("data-id");
-				
-				// desplegamos información:
-				showPolygon(polygons[id]);
-			}
 						
-			/** this {google.maps.Polygon} */
-			function showArrays(event) {
-				showPolygon(this);
-			}
-
-			function showPolygon(polygon) {
-
-				// Since this Polygon only has one path, we can call getPath()
-				// to return the MVCArray of LatLngs
-				var vertices = polygon.getPath();
-
-				var contentString = '<b>Polygon Details</b><br>';
-				//contentString += 'Clicked Location: <br>' + event.latLng.lat() + ',' + event.latLng.lng() + '<br>';
-
-				// Iterate over the vertices.
-				for (var i =0; i < vertices.getLength(); i++) {
-					var xy = vertices.getAt(i);
-					contentString += '<br>' + 'Coordinate: ' + i + '<br>' + xy.lat() +',' + xy.lng();
-				}
-
-				$("div#polygon_info").html(contentString);
-			}			
     </script>
 </head>
 <body onload="initialize()">
