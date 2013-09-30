@@ -107,7 +107,7 @@
 				if(newPolygon == null) return;
 				
 				polygon = polygonAjax(newPolygon.polygon);
-				alert(newPolygon);
+
 				var data = {building: {name: newPolygon.name, description: newPolygon.description, polygon: polygon}};
 				
 				$.ajax({
@@ -239,8 +239,6 @@
 					dataType: 'jsonp', 
 					url: '/buildings/'+ polygonId +'.json',
 					success: function(result){
-				
-						alert('lo borramos!');
 
 						polygon.setMap(null);
 						polygons[id] = null;
